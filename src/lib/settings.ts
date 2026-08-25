@@ -81,12 +81,23 @@ let cache: SiteSettings | null = null;
 
 export async function getSettings(): Promise<SiteSettings> {
   if (cache) return cache;
-  const row = await prisma.siteSetting.findUnique({
-    where: { key: SETTINGS_KEY },
-  });
-  const merged = { ...DEFAULT_SETTINGS, ...parseJSON<Partial<SiteSettings>>(row?.value, {}) };
-  cache = merged;
-  return merged;
+  try {
+    const row = await prisma.siteSetting.findUnique({
+      where: { key: SETTINGS_KEY },
+    });
+    const merged = { ...DEFAULT_SETTINGS, ...parseJSON<Partial<SiteSettings>>(row?.value, {}) };
+    cache = merged;
+    return merged;
+  } catch (error) {
+    // Database unreachable (e.g. during a static build without DATABASE_URL,
+    // or a transient Neon cold-start). Fall back to defaults so the app and
+    // the production build never hard-fail just because of settings.
+    console.error(
+      "getSettings: could not load settings from database, using defaults:",
+      error instanceof Error ? error.message : error,
+    );
+    return DEFAULT_SETTINGS;
+  }
 }
 
 export async function updateSettings(
