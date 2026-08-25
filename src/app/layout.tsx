@@ -6,7 +6,6 @@ import { getSession } from "@/lib/auth";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { FloatingButtons } from "@/components/layout/floating-buttons";
-import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -93,7 +92,6 @@ export default async function RootLayout({
         <main className="flex-1">{children}</main>
         <Footer settings={settings} />
         <FloatingButtons settings={settings} />
-        <Analytics />
       </body>
     </html>
   );
