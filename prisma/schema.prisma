@@ -1,0 +1,279 @@
+// Balaji Holidays — Prisma schema
+// NOTE: uses SQLite for the zero-setup demo. For PostgreSQL production,
+// change `provider` to "postgresql" and set DATABASE_URL accordingly.
+// Enums are stored as strings for cross-database portability.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Users / auth ─────────────────────────
+
+model User {
+  id              String   @id @default(cuid())
+  phone           String?  @unique
+  email           String?  @unique
+  passwordHash    String?
+  name            String?
+  role            String   @default("CUSTOMER") // CUSTOMER | ADMIN
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  admin            Admin?
+  bookings         Booking[]
+  enquiries        Enquiry[]
+  packageEnquiries PackageEnquiry[]
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+}
+
+// ───────────────────────── Vehicles ─────────────────────────
+
+model Vehicle {
+  id             String  @id @default(cuid())
+  name           String
+  slug           String  @unique
+  type           String  @default("OTHER") // BUS | MINI_BUS | TEMPO_TRAVELLER | INNOVA | CAR | OTHER
+  capacity       Int
+  ac             Boolean @default(true)
+  description    String?
+  features       String? // JSON string array
+  status         String  @default("AVAILABLE") // AVAILABLE | BOOKED | ON_TRIP | MAINTENANCE | UNAVAILABLE
+  active         Boolean @default(true)
+  showPricePerKm Boolean @default(true)
+  minBookingDays Int     @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  images      VehicleImage[]
+  pricing     VehiclePricing?
+  bookings    Booking[]
+  driverLinks DriverVehicle[]
+  enquiries   Enquiry[]
+}
+
+model VehicleImage {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  sortOrder Int      @default(0)
+}
+
+model VehiclePricing {
+  id            String  @id @default(cuid())
+  vehicleId     String  @unique
+  vehicle       Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  pricePerKm    Float
+  minBillingKm  Float   @default(0)
+  minKmPerDay   Float   @default(0)
+
+  // toggleable extra charges (only included when enabled)
+  driverAllowancePerDay  Float   @default(0)
+  driverAllowanceEnabled Boolean @default(false)
+  tollEnabled            Boolean @default(false)
+  tollCharge             Float   @default(0)
+  parkingEnabled         Boolean @default(false)
+  parkingCharge          Float   @default(0)
+  permitEnabled          Boolean @default(false)
+  permitCharge           Float   @default(0)
+  nightEnabled           Boolean @default(false)
+  nightCharge            Float   @default(0)
+  waitingEnabled         Boolean @default(false)
+  waitingChargePerHour   Float   @default(0)
+  fixedEnabled           Boolean @default(false)
+  fixedCharge            Float   @default(0)
+  seasonalEnabled        Boolean @default(false)
+  seasonalChargePct      Float   @default(0)
+  packagePrice           Float?
+  updatedAt              DateTime @updatedAt
+}
+
+// ───────────────────────── Drivers ─────────────────────────
+
+model Driver {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String?
+  photoUrl        String?
+  experienceYears Int      @default(0)
+  languages       String? // JSON string array
+  bio             String?
+  rating          Float    @default(4.5)
+  active          Boolean  @default(true)
+  available       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  driverLinks DriverVehicle[]
+  bookings    Booking[]
+}
+
+model DriverVehicle {
+  id        String  @id @default(cuid())
+  driverId  String
+  vehicleId String
+  driver    Driver  @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, vehicleId])
+}
+
+// ───────────────────────── Bookings ─────────────────────────
+
+model Booking {
+  id               String   @id @default(cuid())
+  bookingId        String   @unique
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleId        String
+  vehicle          Vehicle  @relation(fields: [vehicleId], references: [id])
+  driverId         String?
+  driver           Driver?  @relation(fields: [driverId], references: [id])
+  pickup           String
+  destination      String
+  travelDate       DateTime
+  returnDate       DateTime?
+  tripType         String   @default("ONEWAY") // ONEWAY | ROUNDTRIP
+  passengers       Int
+  tripDays         Int      @default(1)
+  oneWayDistanceKm Float
+  distanceKm       Float
+  billableKm       Float?
+  estimatedPrice   Float
+  finalPrice       Float?
+  status           String   @default("PENDING") // PENDING | UNDER_REVIEW | CONFIRMED | REJECTED | CANCELLED | COMPLETED
+  customerName     String
+  customerPhone    String
+  customerEmail    String?
+  customerNotes    String?
+  adminNotes       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ───────────────────────── Enquiries ─────────────────────────
+
+model Enquiry {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  vehicleId  String?
+  vehicle    Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  name       String
+  phone      String
+  email      String?
+  subject    String?
+  message    String
+  status     String   @default("NEW") // NEW | CONTACTED | FOLLOWUP | CONVERTED | CLOSED
+  adminNotes String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ───────────────────────── Packages ─────────────────────────
+
+model Package {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  destination      String
+  startingLocation String   @default("Shivamogga")
+  durationDays     Int
+  placesCovered    String? // JSON string array
+  itinerary        String? // JSON string array
+  description      String?
+  pricingType      String   @default("CONTACT") // PER_PERSON | FIXED | VEHICLE_BASED | CONTACT
+  price            Float?
+  perPersonPrice   Float?
+  vehicleIds       String? // JSON string array of vehicle ids
+  active           Boolean  @default(true)
+  featured         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  images    PackageImage[]
+  enquiries PackageEnquiry[]
+}
+
+model PackageImage {
+  id        String  @id @default(cuid())
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  sortOrder Int     @default(0)
+}
+
+model PackageEnquiry {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  packageId  String?
+  package    Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  name       String
+  phone      String
+  email      String?
+  travelDate DateTime?
+  passengers Int?
+  message    String?
+  status     String   @default("NEW")
+  adminNotes String?
+  createdAt  DateTime @default(now())
+}
+
+// ───────────────────────── Gallery ─────────────────────────
+
+model GalleryItem {
+  id        String   @id @default(cuid())
+  title     String?
+  category  String   @default("Trips")
+  url       String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// ───────────────────────── Site settings ─────────────────────────
+
+model SiteSetting {
+  key       String   @id
+  value     String // JSON
+  updatedAt DateTime @updatedAt
+}
+
+// ───────────────────────── Audit / notifications ─────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorName String?
+  action    String
+  entity    String?
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  type      String   @default("INFO")
+  title     String
+  message   String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
